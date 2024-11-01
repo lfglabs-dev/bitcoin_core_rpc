@@ -1,0 +1,60 @@
+services:
+  btc:
+    container_name: btc
+    image: bitcoin/bitcoin:latest
+    command:
+      -printtoconsole
+      -rpcallowip=0.0.0.0/0
+      -rpcbind=0.0.0.0
+      -rpcauth=${RPC_AUTH}
+      -maxconnections=50
+      -txindex=1
+      -rest
+      # -testnet=1
+      # -regtest=1
+    volumes:
+      - /data/btc:/home/bitcoin/.bitcoin
+    ports:
+      # Mainnet
+      - "8332:8332" # JSON-RPC/REST
+      - "8333:8333" # P2P
+      # # Testnet
+      # - "18332:18332" # RPC
+      # - "18333:18333" # P2P
+      # # Regtest
+      # - "18443:18443" # RPC
+      # - "18444:18444" # P2P
+      # # Signet
+      # - "38332:38332" # RPC
+      # - "38333:38333" # P2P
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'bitcoin-cli -rpcconnect=127.0.0.1 -rpcuser=satoshi -rpcpassword=${RPC_PASSWORD} getblockchaininfo | grep -q ''"initialblockdownload": false''',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  nginx:
+    container_name: nginx
+    image: jonasal/nginx-certbot:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx_secrets:/etc/letsencrypt
+      - ./user_conf.d:/etc/nginx/user_conf.d
+    env_file:
+      - nginx-certbot.env
+    depends_on:
+      btc:
+        condition: service_healthy
+      ord:
+        condition: service_started
+
+volumes:
+  nginx_secrets:
